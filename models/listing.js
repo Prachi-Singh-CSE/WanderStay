@@ -17,12 +17,7 @@ const listingSchema = new Schema({
         type : String,
         default : "https://i.pinimg.com/736x/c0/3c/5d/c03c5d112b2f15a764f2c466cae70136.jpg",
         },
-    //    set : (v) => 
-    //     v === "" 
-    //    ? "https://i.pinimg.com/736x/c0/3c/5d/c03c5d112b2f15a764f2c466cae70136.jpg" 
-    //    : v,
-
-      
+   
     
     },
     price : Number,

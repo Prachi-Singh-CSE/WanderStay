@@ -78,7 +78,7 @@ app.use(session(sessionOptions));
 app.use(flash());
 
 app.use(passport.initialize());
-app.use(passport.session()); // that  user ek hi baar login kare na ki har different pade ke liye login karna padhe
+app.use(passport.session()); 
 passport.use(new LocalStrategy(User.authenticate()));
 
 passport.serializeUser(User.serializeUser());
@@ -94,24 +94,8 @@ app.use((req,res,next)=>{
 
 
 app.use("/listings" , listingRouter);
-app.use("/listings/:id/reviews" , reviewRouter); // due to id route all nexxt info app.js mei hi rah jaati hai , review.js mei nhi jaati hai routes folder mei , isliye we are  using meregeParams : true in this file to access the data from the app.js file 
+app.use("/listings/:id/reviews" , reviewRouter); 
 app.use("/", userRouter);
-
-
-
-// app.get("/testListing" , async(req , res)=>{
-//     let sampleListing = new Listing({
-//         title : "My new villa ",
-//         description : "near beach",
-//         price : 1200,
-//         location : "goa",
-//         country : "India",
-//     });
-
-//     await sampleListing.save()
-//     console.log("sample was saved");
-//     res.send("success...");
-// });
 
 
 app.all("/{*splat}", (req, res, next)=>{
