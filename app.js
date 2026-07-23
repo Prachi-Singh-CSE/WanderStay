@@ -1,13 +1,28 @@
+if(process.env.NODE_ENV != "production"){
+   require('dotenv').config() 
+}
+
 const express = require("express");
 const app = express();
 const mongoose = require("mongoose");
-const Listing  = require("./models/listing.js")
 const path = require ("path");
 const methodOverride = require("method-override");
 const ejsMate = require("ejs-mate");
+const ExpressError = require("./utils/ExpressError.js");
+const session = require("express-session");
+const { MongoStore } = require("connect-mongo");
+const flash = require("connect-flash");
+const passport = require("passport");
+const LocalStrategy = require("passport-local");
+const User = require("./models/user.js");
+const listingRouter = require("./routes/listing.js");
+const reviewRouter = require("./routes/review.js");
+const userRouter = require("./routes/user.js");
 
-const MONGO_URL = "mongodb://127.0.0.1:27017/wanderlust";
 
+
+
+const dbUrl = process.env.ATLASDB_URL;
 main()
    .then(()=>{
     console.log("connected to db");
@@ -17,73 +32,71 @@ main()
    })
 
 async function main() {
-    await mongoose.connect(MONGO_URL);
+    await mongoose.connect(dbUrl);
 }
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname , "views"));
 app.use(express.urlencoded({extended : true}));
+app.use(express.json());
+
 app.use(methodOverride("_method"));
 app.engine('ejs', ejsMate);
 app.use(express.static(path.join(__dirname, "/public")));
 
 
-app.get("/", (req, res)=>{
-    res.send("hello jii ");
-});   
+const store = MongoStore.create({
+    mongoUrl: dbUrl,
+    crypto: {
+        secret: process.env.SECRET,
+    },
+    touchAfter: 24 * 3600,
+});
 
-
-// index route 
-app.get("/listings", async (req ,res)=>{
-   const allListings =  await Listing.find({});
-   res.render("listings/index.ejs", {allListings});
-    
-})
-
-
-// new route 
-app.get("/listings/new", (req , res)=>{
-    res.render("listings/new.ejs");
-})
-
-// create route
-app.post("/listings", async(req,res) =>{
-   const newListing = new Listing(req.body.listing);
-   await newListing.save();
-   res.redirect("/listings");
-})
-
-
-// show route
-app.get("/listings/:id", async (req , res)=>{
-    let {id} = req.params;
-    const listing = await Listing.findById(id);
-    res.render("listings/show.ejs" ,{listing});
+store.on("error", (err) => {
+    console.log("ERROR IN MONGO SESSION STORE", err);
 });
 
 
-// edit route
-app.get("/listings/:id/edit", async(req ,res)=>{
-    let {id} = req.params;
-    const listing = await Listing.findById(id);
-    res.render("listings/edit.ejs",{listing});
-}) 
+const sessionOptions = {
+    store,
+    secret :  process.env.SECRET,
+    resave : false,
+    saveUninitialized : true,
+    cookie :{
+        expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
+        maxAge : 7 * 24 * 60 * 60 * 1000,
+        httpOnly : true,
+    },
+};
 
-// update route
+// app.get("/", (req, res)=>{
+//     res.send("hello ");
+// });
 
-app.put("/listings/:id", async (req, res) => {
-    let { id } = req.params;
-    let listing = await Listing.findByIdAndUpdate(id , {...req.body.listing});// javascript object used to acquire all the values 
-    res.redirect(`/listings/${id}`);
+app.use(session(sessionOptions));
+app.use(flash());
+
+app.use(passport.initialize());
+app.use(passport.session()); // that  user ek hi baar login kare na ki har different pade ke liye login karna padhe
+passport.use(new LocalStrategy(User.authenticate()));
+
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
+
+app.use((req,res,next)=>{
+    res.locals.successMsg = req.flash("success");
+    res.locals.errorMsg = req.flash("error");
+    res.locals.currUser = req.user;
+    next();
 });
 
-// delete route 
-app.delete("/listings/:id", async (req, res) => {
-    let { id } = req.params;
-    let deletedListing = await Listing.findByIdAndDelete(id);
-    console.log(deletedListing);
-    res.redirect("/listings");
-});
+
+
+app.use("/listings" , listingRouter);
+app.use("/listings/:id/reviews" , reviewRouter); // due to id route all nexxt info app.js mei hi rah jaati hai , review.js mei nhi jaati hai routes folder mei , isliye we are  using meregeParams : true in this file to access the data from the app.js file 
+app.use("/", userRouter);
+
 
 
 // app.get("/testListing" , async(req , res)=>{
@@ -101,6 +114,15 @@ app.delete("/listings/:id", async (req, res) => {
 // });
 
 
-app.listen(8080 , ()=>{
-    console.log("server is listening to port 8080")
+app.all("/{*splat}", (req, res, next)=>{
+    next(new ExpressError(403 ,"page not found"));
 })
+
+app.use((err, req ,res, next)=>{
+    let{statusCode=500, message="Something went wrong"} = err;
+    res.status(statusCode).render("listings/error.ejs" , {message});
+});
+
+app.listen(8080 , ()=>{
+    console.log("server is listening to port 8080");
+});
